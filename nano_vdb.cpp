@@ -10,11 +10,12 @@
 float NanoVectorDB::calculate_similarity(const std::vector<float> &a,
                                          const std::vector<float> &b) const {
   // --- NEON (SIMD) EXPLANATION ---
-  // SIMD stands for "Single Instruction, Multiple Data". 
+  // SIMD stands for "Single Instruction, Multiple Data".
   // Instead of performing one multiplication at a time, the Apple Silicon chip
-  // can process 4 simultaneously. 'float32x4_t' acts as a register holding 4 floats.
-  
-  size_t simd_loops = dimensions / 4; 
+  // can process 4 simultaneously. 'float32x4_t' acts as a register holding 4
+  // floats.
+
+  size_t simd_loops = dimensions / 4;
 
   // vdupq_n_f32(0.0f): Fill a register with four zeros: [0.0, 0.0, 0.0, 0.0]
   float32x4_t v_dot_product = vdupq_n_f32(0.0f);
@@ -27,26 +28,27 @@ float NanoVectorDB::calculate_similarity(const std::vector<float> &a,
     float32x4_t qa = vld1q_f32(&a[i]);
     float32x4_t qb = vld1q_f32(&b[i]);
 
-    // vmlaq_f32: "Vector Multiply Accumulate". 
+    // vmlaq_f32: "Vector Multiply Accumulate".
     // Executes in a single CPU clock cycle:
     // 1. Multiplies 'qa' and 'qb' (4 pairs of numbers at once)
     // 2. Accumulates (adds) the result into 'v_dot_product'
     v_dot_product = vmlaq_f32(v_dot_product, qa, qb);
-    
+
     // Similarly, calculate the vector magnitude (norm) for A and B
     v_norm_a = vmlaq_f32(v_norm_a, qa, qa);
     v_norm_b = vmlaq_f32(v_norm_b, qb, qb);
 
-    i += 4; 
+    i += 4;
   }
 
-  // vaddvq_f32: "Vector Add Across". Takes the register with the 4 partial results
-  // and sums them all together returning a single standard 'float'.
+  // vaddvq_f32: "Vector Add Across". Takes the register with the 4 partial
+  // results and sums them all together returning a single standard 'float'.
   float dot_product = vaddvq_f32(v_dot_product);
   float norm_a = vaddvq_f32(v_norm_a);
   float norm_b = vaddvq_f32(v_norm_b);
 
-  // Handle any remaining elements if 'dimensions' is not a perfect multiple of 4
+  // Handle any remaining elements if 'dimensions' is not a perfect multiple of
+  // 4
   for (; i < dimensions; ++i) {
     dot_product += a[i] * b[i];
     norm_a += a[i] * a[i];
@@ -63,11 +65,12 @@ float NanoVectorDB::calculate_similarity(const std::vector<float> &a,
 
 // Utility function to help std::partial_sort order {index, score} pairs.
 // Returns 'true' if element 'a' has a higher score than 'b'.
-bool compare_candidates(const std::pair<size_t, float> &a, const std::pair<size_t, float> &b) {
+bool compare_candidates(const std::pair<size_t, float> &a,
+                        const std::pair<size_t, float> &b) {
   return a.second > b.second;
 }
 
-// GRAPH CONSTRUCTION & INSERTION
+// GRAPH CONSTRUCTION & INSERTION (HNSW Optimization)
 bool NanoVectorDB::insert(const std::string &id,
                           const std::vector<float> &vec) {
   if (vec.size() != dimensions)
@@ -84,36 +87,13 @@ bool NanoVectorDB::insert(const std::string &id,
 
   // If there are existing nodes, connect the new node to its most similar neighbors
   if (registry.size() > 1) {
-    std::vector<std::pair<size_t, float>> candidates;
-    candidates.reserve(new_index);
+    // FASE 0 HNSW: INVECE di usare un ciclo For lento O(N) su tutti i nodi passati,
+    // usiamo la nostra stessa funzione search_graph per trovare i vicini migliori in O(log N)!
+    std::vector<SearchResult> best_neighbors = search_graph(vec, M);
 
-    // EXPENSIVE PHASE: Scan all previous nodes
-    for (size_t i = 0; i < new_index; ++i) {
-      float score = calculate_similarity(vec, registry[i].data);
-      
-      std::pair<size_t, float> pair_score;
-      pair_score.first = i;
-      pair_score.second = score;
-      candidates.push_back(pair_score);
-    }
-
-    size_t actual_m = std::min(M, candidates.size());
-    
-    // --- std::partial_sort EXPLANATION ---
-    // Instead of sorting the ENTIRE list (e.g., 10,000 elements) which is slow,
-    // partial_sort only extracts the top 'actual_m' (e.g., 4) highest elements.
-    // It places the top 4 at the very beginning of the list in perfect order,
-    // and leaves the rest of the list unsorted, saving significant CPU cycles.
-    std::partial_sort(
-        candidates.begin(), 
-        candidates.begin() + actual_m, // We only care about the top M
-        candidates.end(),
-        compare_candidates 
-    );
-
-    // Create bidirectional connections (edges) in the graph
-    for (size_t i = 0; i < actual_m; ++i) {
-      size_t neighbor_idx = candidates[i].first;
+    // Create bidirectional connections (edges) in the graph using the winners
+    for (const SearchResult &res : best_neighbors) {
+      size_t neighbor_idx = res.index;
       
       // The new node adds the old node as a neighbor
       registry[new_index].neighbors.push_back(neighbor_idx);
@@ -129,7 +109,7 @@ bool NanoVectorDB::insert(const std::string &id,
 
 // Utility function to help std::partial_sort order SearchResults
 bool compare_results(const SearchResult &a, const SearchResult &b) {
-  return a.score > b.score; 
+  return a.score > b.score;
 }
 
 // LINEAR SEARCH (Brute Force with SIMD optimizations)
@@ -147,22 +127,20 @@ NanoVectorDB::search_linear(const std::vector<float> &query_vec,
 
   // Loop through every single record in the DB
   // Explicit type is used instead of 'auto' for clarity
-  for (const VectorRecord &record : registry) {
+  for (size_t i = 0; i < registry.size(); ++i) {
+    const VectorRecord &record = registry[i];
     float score = calculate_similarity(query_vec, record.data);
     
     SearchResult result;
     result.id = record.id;
     result.score = score;
+    result.index = i; // Save the internal index
     all_results.push_back(result);
   }
 
   // Sort to bring the top 'K' to the front, ignoring the rest
-  std::partial_sort(
-      all_results.begin(), 
-      all_results.begin() + actual_k,
-      all_results.end(),
-      compare_results
-  );
+  std::partial_sort(all_results.begin(), all_results.begin() + actual_k,
+                    all_results.end(), compare_results);
 
   // Return only the top K elements
   std::vector<SearchResult> top_results;
@@ -183,18 +161,21 @@ NanoVectorDB::search_graph(const std::vector<float> &query_vec,
 
   // Keep track of visited nodes to avoid infinite loops
   std::vector<bool> visited(registry.size(), false);
-  
-  // Track all nodes "touched" during the journey. The winners will be among these.
+
+  // Track all nodes "touched" during the journey. The winners will be among
+  // these.
   std::vector<SearchResult> path_candidates;
 
   // Start from a fixed entry point (Node 0)
   size_t current_idx = 0;
-  float current_score = calculate_similarity(query_vec, registry[current_idx].data);
+  float current_score =
+      calculate_similarity(query_vec, registry[current_idx].data);
   visited[current_idx] = true;
-  
+
   SearchResult first_step;
   first_step.id = registry[current_idx].id;
   first_step.score = current_score;
+  first_step.index = current_idx;
   path_candidates.push_back(first_step);
 
   bool keep_walking = true;
@@ -213,9 +194,10 @@ NanoVectorDB::search_graph(const std::vector<float> &query_vec,
         SearchResult neighbor_candidate;
         neighbor_candidate.id = registry[neighbor_idx].id;
         neighbor_candidate.score = score;
+        neighbor_candidate.index = neighbor_idx;
         path_candidates.push_back(neighbor_candidate);
 
-        // If this neighbor is more similar to the query than where we are now, 
+        // If this neighbor is more similar to the query than where we are now,
         // it becomes our next step!
         if (score > best_neighbor_score) {
           best_neighbor_score = score;
@@ -233,14 +215,10 @@ NanoVectorDB::search_graph(const std::vector<float> &query_vec,
   }
 
   size_t actual_k = std::min(top_k, path_candidates.size());
-  
+
   // Rank the nodes touched during the walk to extract the absolute best
-  std::partial_sort(
-      path_candidates.begin(), 
-      path_candidates.begin() + actual_k,
-      path_candidates.end(),
-      compare_results
-  );
+  std::partial_sort(path_candidates.begin(), path_candidates.begin() + actual_k,
+                    path_candidates.end(), compare_results);
 
   std::vector<SearchResult> top_results;
   for (size_t i = 0; i < actual_k; ++i) {
@@ -263,7 +241,7 @@ bool NanoVectorDB::save_to_file(const std::string &filename) const {
     size_t id_size = record.id.size();
     out.write(reinterpret_cast<const char *>(&id_size), sizeof(id_size));
     out.write(record.id.data(), id_size);
-    
+
     out.write(reinterpret_cast<const char *>(record.data.data()),
               dimensions * sizeof(float));
 

@@ -11,8 +11,7 @@ int main() {
   std::cout << "=== MILESTONE 4: NAVIGABLE GRAPH GENERATION ==="
             << std::endl;
   std::cout << "Inserting 10,000 stable vectors (building graph edges)...\n"
-               "NOTE: Since this is an unoptimized O(N^2) insertion, "
-               "it might take a moment to build the graph!"
+               "NOTE: Using optimized HNSW insertion (O(N log N)). It should be extremely fast!"
             << std::endl;
 
   // We use a fixed seed (42) to ensure reproducible tests across executions.
