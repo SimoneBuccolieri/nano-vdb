@@ -1,1 +1,35 @@
+# --- C++ Build Artifacts ---
+# Eseguibili C++
 nano_vdb_test
+build/
+
+# Librerie condivise e file oggetto
+*.so
+*.dylib
+*.o
+*.a
+
+# Configurazione del C++ Language Server (opzionale, ma di solito si ignora)
+compile_flags.txt
+compile_commands.json
+
+# --- Python Artifacts ---
+# Cartelle di cache di Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env
+
+# --- OS Specific ---
+# File di sistema Mac
+.DS_Store
+
+# File del tuo IDE
+.vscode/
+.idea/
