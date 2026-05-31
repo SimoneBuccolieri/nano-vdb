@@ -1,7 +1,11 @@
 # --- C++ Build Artifacts ---
 # Eseguibili C++
+nano_vdb
 nano_vdb_test
 build/
+
+# Database salvati
+*.vdb
 
 # Librerie condivise e file oggetto
 *.so

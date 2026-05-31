@@ -38,7 +38,7 @@ print("Inserimento e costruzione del grafo HNSW completati!")
 
 # 4. IL TEST DELLA VERITÀ: La Ricerca Semantica
 # Facciamo una domanda che NON contiene le stesse identiche parole del testo nel DB
-domanda = "Qual è la vetta più maestosa d'Europa?"
+domanda = "Qual è la capitale?"
 print(f"\nDomanda dell'utente: '{domanda}'")
 
 # Traduciamo la domanda in coordinate usando lo stesso modello
