@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoVDB - AI Vector Database Dashboard</title>
+    <!-- Font di tendenza per un design premium -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <span class="gradient-text">NanoVDB</span>
+                <span class="badge">SQ8 SIMD C++</span>
+            </div>
+            <p class="subtitle">Interfaccia interattiva per Database Vettoriale e RAG locale</p>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <div class="dashboard-grid">
+            <!-- Left Column: Status and Actions -->
+            <div class="left-col">
+                <!-- Status Panel -->
+                <section class="card status-card">
+                    <h2>Stato del Database</h2>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="label">Dimensioni Vettori</span>
+                            <span class="value" id="db-dimensions">-</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="label">Documenti Indicizzati</span>
+                            <span class="value" id="db-size">-</span>
+                        </div>
+                    </div>
+                    <div class="doc-list-container">
+                        <h3>Documenti nel DB</h3>
+                        <ul id="db-doc-list" class="doc-list">
+                            <!-- Popolato da JS -->
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Insert Panel -->
+                <section class="card insert-card">
+                    <h2>Aggiungi Documento</h2>
+                    <form id="insert-form">
+                        <div class="input-group">
+                            <label for="doc-id">ID Documento</label>
+                            <input type="text" id="doc-id" placeholder="es. doc_10" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="doc-text">Testo da Indicizzare</label>
+                            <textarea id="doc-text" rows="3" placeholder="Scrivi qui il testo che verrà tradotto in vettore..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="btn-insert">Aggiungi e Quantizza</button>
+                    </form>
+                    <div id="insert-message" class="message"></div>
+                </section>
+            </div>
+
+            <!-- Right Column: Query and RAG -->
+            <div class="right-col">
+                <!-- Query / Search Panel -->
+                <section class="card query-card">
+                    <h2>Ricerca Semantica</h2>
+                    <div class="query-controls">
+                        <div class="input-group flex-grow">
+                            <label for="search-query">Cosa stai cercando?</label>
+                            <input type="text" id="search-query" placeholder="Scrivi una frase (es. Cibo italiano o Montagne)...">
+                        </div>
+                        <div class="input-group">
+                            <label for="search-top-k">Top K</label>
+                            <select id="search-top-k">
+                                <option value="1">1</option>
+                                <option value="3" selected>3</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="search-mode">Metodo</label>
+                            <select id="search-mode">
+                                <option value="search">Grafo HNSW (O(log N))</option>
+                                <option value="search_linear">Scansione Lineare (O(N))</option>
+                            </select>
+                        </div>
+                        <button id="btn-search" class="btn btn-secondary">Cerca nel Grafo</button>
+                    </div>
+
+                    <div class="search-results-area">
+                        <h3>Risultati della Ricerca</h3>
+                        <div id="search-results" class="results-list">
+                            <p class="placeholder-text">Inserisci una query per avviare la ricerca semantica.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- RAG Panel -->
+                <section class="card rag-card">
+                    <h2>Assistente RAG Locale (Ollama + phi3)</h2>
+                    <div class="rag-input-area">
+                        <input type="text" id="rag-query" placeholder="Fai una domanda basata sul contesto (es. Qual è la capitale?)...">
+                        <button id="btn-rag" class="btn btn-accent">Chiedi all'AI</button>
+                    </div>
+
+                    <div class="rag-output-area">
+                        <div class="rag-block">
+                            <h4>Contesto Recuperato dal DB C++:</h4>
+                            <div id="rag-context" class="context-box">
+                                <p class="placeholder-text">Il contesto estratto comparirà qui...</p>
+                            </div>
+                        </div>
+                        <div class="rag-block">
+                            <h4>Risposta Generata da Ollama:</h4>
+                            <div id="rag-response" class="response-box">
+                                <p class="placeholder-text">La risposta dell'LLM comparirà qui...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

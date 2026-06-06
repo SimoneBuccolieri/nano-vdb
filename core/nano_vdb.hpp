@@ -3,12 +3,16 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 
 // Represents a single item in the database.
 // This is effectively a "Node" in our graph representation.
 struct VectorRecord {
   std::string id; // Unique identifier for the document (e.g., "doc_123")
-  std::vector<float> data; // The actual embedding vector
+  std::vector<uint8_t> qdata; // Quantized embedding vector (SQ8)
+  float min_val; // Minimum value of original vector dimensions (for dequantization)
+  float scale;   // Quantization scale (for dequantization)
+  float norm;    // Precomputed norm of the original vector
 
   // NEW: Stores the indices of neighboring nodes in the graph.
   // Instead of searching the entire DB, we will hop from neighbor to neighbor.
@@ -37,8 +41,10 @@ private:
 
   // Internal function to calculate Cosine Similarity between two vectors.
   // Returns a score from -1 (opposite) to 1 (identical).
-  float calculate_similarity(const std::vector<float> &a,
-                             const std::vector<float> &b) const;
+  float calculate_similarity(const std::vector<float> &query,
+                             float query_norm,
+                             float query_sum,
+                             const VectorRecord &record) const;
 
 public:
   explicit NanoVectorDB(size_t dims) : dimensions(dims) {}
