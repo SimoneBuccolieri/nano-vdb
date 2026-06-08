@@ -8,11 +8,17 @@ build/
 # Database salvati
 *.vdb
 
+# Modelli e pesi di grandi dimensioni
+*.gguf
+*.bin
+models/
+
 # Librerie condivise e file oggetto
 *.so
 *.dylib
 *.o
 *.a
+lib/
 
 # Configurazione del C++ Language Server (opzionale, ma di solito si ignora)
 compile_flags.txt

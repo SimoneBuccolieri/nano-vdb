@@ -1,3 +1,6 @@
+import sys
+sys.path.append("lib")
+
 import json
 import urllib.request
 from fastapi import FastAPI, HTTPException
@@ -5,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 import nano_vdb
+
+from llama_cpp import Llama
 
 app = FastAPI(title="NanoVDB Microservice")
 
@@ -19,12 +24,25 @@ app.add_middleware(
 
 # 1. Carichiamo il modello AI di embedding
 print("Caricamento del modello SentenceTransformer...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
 DIMS = model.get_embedding_dimension()
 
 # 2. Inizializziamo il database vettoriale in C++
 print(f"Inizializzazione NanoVectorDB con {DIMS} dimensioni...")
 db = nano_vdb.NanoVectorDB(DIMS)
+
+# Inizializziamo il modello locale GGUF (Gemma-2-2b-it) con accelerazione Metal
+print("Inizializzazione del modello LLM Gemma-2-2b-it...")
+try:
+    llama = Llama(
+        model_path="models/gemma-2-2b-it-Q4_K_M.gguf",
+        n_ctx=2048,           # Finestra di contesto comoda
+        n_gpu_layers=-1,      # Carica tutti i layers sulla GPU Metal
+        verbose=False         # Evita di inquinare i log con il debug interno di llama.cpp
+    )
+except Exception as e:
+    print(f"Errore caricamento modello Gemma GGUF: {e}")
+    llama = None
 
 # 3. Manteniamo una mappa in memoria per associare l'ID del vettore al testo originale
 # Nelle applicazioni reali, questo sarebbe memorizzato in un database SQL/chiave-valore classico.
@@ -114,7 +132,8 @@ def run_rag(req: RagRequest):
     try:
         # 1. Recupero Semantico dal DB C++
         query_vector = model.encode(req.query).tolist()
-        results = db.search_graph(query_vector, top_k=1)
+        # Usiamo la ricerca lineare per garantire il massimo recupero nel playground con pochi documenti
+        results = db.search_linear(query_vector, top_k=1)
         
         if not results:
             return {"query": req.query, "context": "", "response": "Nessun documento trovato nel database."}
@@ -122,35 +141,26 @@ def run_rag(req: RagRequest):
         vincitore = results[0]
         contesto_trovato = document_store.get(vincitore.id, "")
         
-        # 2. Generazione con LLM via Ollama
-        prompt = f"""Sei un assistente intelligente. Usa SOLO le informazioni fornite nel seguente contesto per rispondere alla domanda dell'utente. Se l'informazione non è nel contesto, rispondi 'Non lo so'.
-
-CONTESTO:
-{contesto_trovato}
-
-DOMANDA DELL'UTENTE:
-{req.query}
-
-RISPOSTA BREVE IN ITALIANO:
-"""
-        data = {
-            "model": "phi3:mini",
-            "prompt": prompt,
-            "stream": False
-        }
-        
-        ollama_req = urllib.request.Request(
-            'http://localhost:11434/api/generate',
-            data=json.dumps(data).encode('utf-8'),
-            headers={'Content-Type': 'application/json'}
-        )
-        
-        try:
-            with urllib.request.urlopen(ollama_req) as response:
-                result = json.loads(response.read().decode('utf-8'))
-                risposta_llm = result.get("response", "").strip()
-        except Exception as e:
-            risposta_llm = f"[Errore di connessione a Ollama: {e}. Assicurati che Ollama sia in esecuzione sul tuo Mac!]"
+        # 2. Generazione locale con LLM nativo C++ (LlamaEngine)
+        if llama:
+            # Formattiamo il prompt per Gemma-2 Instruct
+            prompt = (
+                "<start_of_turn>user\n"
+                f"Contesto: {contesto_trovato}\n\n"
+                f"Domanda: {req.query}\n\n"
+                "Rispondi alla domanda usando esclusivamente le informazioni contenute nel Contesto fornito. "
+                "Sii conciso e diretto. Rispondi in italiano.<end_of_turn>\n"
+                "<start_of_turn>model\n"
+            )
+            output = llama(
+                prompt,
+                max_tokens=150,
+                temperature=0.2,
+                stop=["<end_of_turn>", "\n\n"]
+            )
+            risposta_llm = output["choices"][0]["text"].strip()
+        else:
+            risposta_llm = "[Modello Gemma GGUF non pronto o non caricato. Controlla il download del modello.]"
 
         return {
             "query": req.query,

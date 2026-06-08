@@ -1,4 +1,5 @@
 #include "nano_vdb.hpp"
+#include "llama_inference.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h> // Essenziale: traduce automaticamente std::vector e std::string tra C++ e Python!
 
@@ -36,4 +37,10 @@ PYBIND11_MODULE(nano_vdb, m) {
       .def("save_to_file", &NanoVectorDB::save_to_file, py::arg("filename"))
       .def("load_from_file", &NanoVectorDB::load_from_file, py::arg("filename"))
       .def("size", &NanoVectorDB::size);
+
+  // Esportiamo la classe LlamaEngine per l'inferenza nativa dei Transformer LLM
+  py::class_<LlamaEngine>(m, "LlamaEngine")
+      .def(py::init<const std::string&, const std::string&>(), py::arg("model_path"), py::arg("tokenizer_path"))
+      .def("generate", &LlamaEngine::generate, py::arg("prompt"), py::arg("max_tokens"), py::arg("temperature") = 0.9f)
+      .def("is_ready", &LlamaEngine::is_ready);
 }

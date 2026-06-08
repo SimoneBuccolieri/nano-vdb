@@ -102,12 +102,12 @@
 
                 <!-- RAG Panel -->
                 <section class="card rag-card">
-                    <h2>Assistente RAG Locale (Ollama + phi3)</h2>
+                    <h2>Assistente RAG Locale (Gemma-2-2b-it GGUF)</h2>
                     <div class="rag-input-area">
                         <input type="text" id="rag-query" placeholder="Fai una domanda basata sul contesto (es. Qual è la capitale?)...">
                         <button id="btn-rag" class="btn btn-accent">Chiedi all'AI</button>
                     </div>
-
+ 
                     <div class="rag-output-area">
                         <div class="rag-block">
                             <h4>Contesto Recuperato dal DB C++:</h4>
@@ -116,7 +116,7 @@
                             </div>
                         </div>
                         <div class="rag-block">
-                            <h4>Risposta Generata da Ollama:</h4>
+                            <h4>Risposta Generata da Gemma-2-2b-it:</h4>
                             <div id="rag-response" class="response-box">
                                 <p class="placeholder-text">La risposta dell'LLM comparirà qui...</p>
                             </div>
